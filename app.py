@@ -13,7 +13,7 @@ password = os.environ.get("SMTP_PASSWORD", "")
 url = os.environ.get("SITE_URL", "http://example.com")
 ALLOWED_HOST = os.environ.get('HOSTS', "localhost, 127.0.0.1").split(",")
 
-CORS(app origins=ALLOWED_HOST)
+CORS(app, origins=ALLOWED_HOST)
 
 # create user and notify developer endpoint 
 @app.route('/spotify/mail', methods=['POST'])
