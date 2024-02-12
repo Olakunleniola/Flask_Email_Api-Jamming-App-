@@ -21,11 +21,10 @@ def send_mail():
     # Get username and email from the data
     user_email = data['email']
     user_name = data['name']
-    print(user_name, user_email)
     # Email Message body that will be sent to the user
     user_body = """
         <h1>REGISTRATION REQUEST</h1>
-        <p>Dear <b>{0}</b>,</p>
+        <p>Dear <strong>{0}</strong>,</p>
         <p>
             Thank you for choosing the Jamming App.<br>
             Your registration request has been submitted successfully.<br>
@@ -40,7 +39,7 @@ def send_mail():
         <p><b>Name:</b> {0}</p>
         <p><b>Email:</b> {1}</p>
 
-        <form action="http://127.0.0.1:5000/spotify/register?username={0}&email={1}" method="POST">
+        <form action="{2}/spotify/register?username={0}&email={1}" method="POST">
             <button type="submit" style="
                 background-color: #4CAF50; /* Green */
                 border: none;
@@ -52,7 +51,7 @@ def send_mail():
                 font-size: 16px;
                 margin: 4px 2px;">Register User</button>
         </form>
-    """.format(user_name, user_email)
+    """.format(user_name, user_email, url)
     
     try:
         # SENd the eamil to the user and developer 
@@ -86,7 +85,6 @@ def get_user(name):
             data = json.load(json_file)
             user = [user for user in data if user['name'].lower() == name.lower()]
             # user = next((user for user in data if user['name'].lower() == name.lower()), None) # Alternative
-            print(user)
             #if user exist return user
             if user:
                 return jsonify(user[0]), 200
@@ -103,13 +101,11 @@ def get_user(name):
 def alter_user():
     username = str(request.args.get('username'))
     user_email = str(request.args.get('email'))
-    print(username)
     try:
         # cjheck the user in the database
         with open('users.json', "r") as user_json:
             users = json.load(user_json)
             user = next((user for user in users if user['name'].lower() == username.lower()), None)
-            print(user)
             # if user exist, Alter the registered and pending status of user and also send email to the user
             if user:
                 user_index = users.index(user)
