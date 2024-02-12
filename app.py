@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, abort
+from flask_cors import CORS
 import emails
 import json
 import os
@@ -10,6 +11,9 @@ app = Flask(__name__)
 sender = os.environ.get("EMAIL_SENDER", "")
 password = os.environ.get("SMTP_PASSWORD", "")
 url = os.environ.get("SITE_URL", "http://example.com")
+ALLOWED_HOST = os.environ.get('HOSTS', "localhost, 127.0.0.1").split(",")
+
+CORS(app origins=ALLOWED_HOST)
 
 # create user and notify developer endpoint 
 @app.route('/spotify/mail', methods=['POST'])
