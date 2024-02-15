@@ -1,24 +1,53 @@
 from flask import Flask, request, jsonify, abort
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
+from flask_migrate import Migrate
 from flask_cors import CORS
 import emails
-import json
 import os
 
 # Create a Flask application
 app = Flask(__name__)
+# creating a database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Users.db'
+db = SQLAlchemy(app)
+
+# created a model/table
+class User(db.Model):
+    _email = db.Column('email', db.String(120), primary_key=True, unique=True, nullable=False)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    registered = db.Column(db.Boolean, default=False ,nullable=False)
+    pending = db.Column(db.Boolean, default=True ,nullable=False)
+    
+    # ensure the email column is stored in lower case
+    @property
+    def email(self):
+        return self._email
+
+    @email.setter
+    def email(self, value):
+        if value is not None:
+            self._email = value.lower()
+
+    def __repr__(self):
+        return '<User %r>' % self.name
 
 # Get Environment variable information
-sender = os.environ.get("EMAIL_SENDER", "")
-password = os.environ.get("SMTP_PASSWORD", "")
+sender = os.environ.get("EMAIL_SENDER", os.environ.get('SENDER'))
+password = os.environ.get("SMTP_PASSWORD", os.environ.get('PASS'))
 url = os.environ.get("SITE_URL", "http://example.com")
 ALLOWED_HOST = os.environ.get('HOSTS', "localhost, 127.0.0.1").split(",")
 
-CORS(app, origins=ALLOWED_HOST)
+# Allow connection from all host
+CORS(app) 
+
+# Allow migration
+migrate = Migrate(app, db)
 
 # create user and notify developer endpoint 
 @app.route('/spotify/mail', methods=['POST'])
 def send_mail():
-    # extract the data fr the request body
+    # extract the data from the request body
     data = request.json
     if data is None or 'name' not in data or 'email' not in data:
         abort(400) # return if request body is empty or does not contain required data
@@ -28,22 +57,21 @@ def send_mail():
     # Email Message body that will be sent to the user
     user_body = """
         <h1>REGISTRATION REQUEST</h1>
-        <p>Dear <strong>{0}</strong>,</p>
-        <p>
+        <p style="font-size:20px>Dear <strong>{0}</strong>,</p>
+        <p style="font-size:20px; line-height:8px;">
             Thank you for choosing the Jamming App.<br>
             Your registration request has been submitted successfully.<br>
             <br>You will be notified when your request has been granted.    
         </p>
-        <p>Keep Jamming!!!<br>Lakunle-CEO</p>
+        <p style="font-size:20px; line-height:8px;>Keep Jamming!!!<br>Lakunle-CEO</p>
     """.format(user_name)
-    
     # Email Message body that will be sent to the developer 
     client_body = """
         <h1>Register User</h1>
         <p><b>Name:</b> {0}</p>
         <p><b>Email:</b> {1}</p>
 
-        <form action="{2}/spotify/register?username={0}&email={1}" method="POST">
+        <form action="{2}/spotify/register?email={1}&name={0}" method="POST">
             <button type="submit" style="
                 background-color: #4CAF50; /* Green */
                 border: none;
@@ -56,97 +84,84 @@ def send_mail():
                 margin: 4px 2px;">Register User</button>
         </form>
     """.format(user_name, user_email, url)
-    
+    new_user = User(name=user_name, email=user_email)
     try:
+        # Register add new user to the data base
+        db.session.add(new_user)
+        db.session.commit()
         # SENd the eamil to the user and developer 
         emails.send_html_mail(sender, sender,"REQUEST TO REGISTER USER TO SPOTIFY", client_body, password)
         emails.send_html_mail(sender, user_email,"JAMMING APP REGISTRATION", user_body, password)
-        
-        # Register add new user to the data base
-        with open ('users.json', "r") as users_json:
-            user_data = json.load(users_json)
-            new_user = {'name':user_name, 'email':user_email, 'registered': False, 'pending': True}
-            user_data.append(new_user)
-        with open ('users.json', "w") as users_json:
-            json.dump(user_data, users_json)
         # Return the new user if successful
-        return jsonify(new_user), 201  
-    # Handle Database Error
-    except FileExistsError:
-        abort(500)
-    # Handle all  Errors
+        return  jsonify({'name':user_name, 'email':user_email, 'registered': False, 'pending': True}), 201
+    #Handle database errors
+    except IntegrityError as e:
+        return jsonify({"error": "user with the email already exist"}), 401
+    # # Handle all Other Errors
     except Exception as e:
         print(e)
         abort(500)
-        
 
 # get user endpoint
-@app.route('/spotify/user/<name>', methods=["GET"])
-def get_user(name):
+@app.route('/spotify/user/<email>', methods=["GET"])
+def get_user(email):
     try:
-        # Get user in the data base  
-        with open('users.json', "r") as json_file:
-            data = json.load(json_file)
-            user = [user for user in data if user['name'].lower() == name.lower()]
-            # user = next((user for user in data if user['name'].lower() == name.lower()), None) # Alternative
-            #if user exist return user
-            if user:
-                return jsonify(user[0]), 200
-            # else return error message
-            else:
-                return jsonify({"error":"user does not exist"}), 401
+        # Get user in the data base
+        user = User.query.get(email.lower())
+        if user: #check if user exist
+            # if user return a json user object
+            user = {"name":user.name, "email":user.email, "registered":user.registered, "pending":user.pending}
+            return jsonify(user), 200
+        # else return error message
+        else:
+            return jsonify({"error":"user does not exist"}), 401
     #Hnadle error            
-    except:
+    except Exception as e:
+        print(e)
         abort(500)
-    
 
 # register user endpoint 
 @app.route('/spotify/register', methods=['POST'])
 def alter_user():
-    username = str(request.args.get('username'))
-    user_email = str(request.args.get('email'))
+    username = request.args.get('name')
+    user_email = request.args.get('email')
+    # Check if email is part of the request
+    if user_email is None or username is None:
+        abort(400)
+    # get the user
+    user = User.query.get(user_email.lower())
+    print(user)
+    # user not exist return error message 
+    if not user:
+        return jsonify({"error":"user does not exist"}), 401
+    # if user exist, Alter the registered and pending status of user and also send email to the user
+    user.registered = True
+    user.pending = False
+    #update the database
     try:
-        # cjheck the user in the database
-        with open('users.json', "r") as user_json:
-            users = json.load(user_json)
-            user = next((user for user in users if user['name'].lower() == username.lower()), None)
-            # if user exist, Alter the registered and pending status of user and also send email to the user
-            if user:
-                user_index = users.index(user)
-                users[user_index]["registered"] = True
-                users[user_index]["pending"] = False
-                #update the database
-                with open('users.json', "w") as users_js:
-                    json.dump(users, users_js)
-                    
-                # send an email to the user and notify changes made 
-                body = """
-                    <h1>RE: REGISTRATION REQUEST</h1>
-                    <p>Dear <b>{0}</b>,</p>
-                    <p>
-                        This is to inform you that your request to use the jamming app have granted<br> 
-                        click <a href={1}>here</a> to visit the webpage<br><br>
-                        Thank you for choosing the jamming app
-                    </p>
-                    <p>
-                        Lakunle<br>
-                        Keep Jamming!!!!!
-                    </p> 
-                """.format(username, url)
-                emails.send_html_mail(sender, user_email, "RE:JAMMIMG APP REGISTRATION REQUEST", body, password)
-            # else user not exist return error message 
-            else:
-                return jsonify({"error": "user nor found"}), 404 
-        #return success if successful
+        db.session.add(user)
+        db.session.commit()
+        # send an email to the user and notify changes made 
+        body = """
+            <h1>RE: REGISTRATION REQUEST</h1>
+            <p style="font-size:20px;">Dear <b>{0}</b>,</p>
+            <p style="font-size:20px;">
+                This is to inform you that your request to use the jamming app have granted<br> 
+                click <a href={1}>here</a> to visit the webpage<br><br>
+                Thank you for choosing the jamming app
+            </p>
+            <p style="font-size:20px;">
+                Lakunle<br>
+                Keep Jamming!!!!!
+            </p> 
+        """.format(username, url)
+        emails.send_html_mail(sender, user_email, "RE:JAMMIMG APP REGISTRATION REQUEST", body, password)
+        # return a success message
         return jsonify({"msg":"Success"}), 201
-    #Handle database errors
-    except FileExistsError:
-        abort(500)
     #handle all errors
     except Exception as e:
-        print(e)
-        abort(404)
-        
+        print(e) 
+        abort(500)
 
 # Handle Page not found errors  
 @app.errorhandler(404)
