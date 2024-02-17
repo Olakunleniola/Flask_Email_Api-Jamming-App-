@@ -6,16 +6,28 @@ from flask_cors import CORS
 import emails
 import os
 
+
+# Get Environment variable information
+sender = os.environ.get("EMAIL_SENDER", os.environ.get('SENDER'))
+password = os.environ.get("SMTP_PASSWORD", os.environ.get('PASS'))
+url = os.environ.get("SITE_URL", "http://example.com")
+ALLOWED_HOST = os.environ.get('HOSTS', "localhost, 127.0.0.1").split(",")
+DEBUG = bool(int(os.environ.get('DEBUG', 1)))
 # Create a Flask application
 app = Flask(__name__)
+
 # creating a database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Users.db'
+if DEBUG:
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('LOCAL_DATABASE_URL', "")
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', "")
+   
 db = SQLAlchemy(app)
 
 # created a model/table
-class User(db.Model):
+class SpotifyUser(db.Model):
     _email = db.Column('email', db.String(120), primary_key=True, unique=True, nullable=False)
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
     registered = db.Column(db.Boolean, default=False ,nullable=False)
     pending = db.Column(db.Boolean, default=True ,nullable=False)
     
@@ -31,12 +43,6 @@ class User(db.Model):
 
     def __repr__(self):
         return '<User %r>' % self.name
-
-# Get Environment variable information
-sender = os.environ.get("EMAIL_SENDER", os.environ.get('SENDER'))
-password = os.environ.get("SMTP_PASSWORD", os.environ.get('PASS'))
-url = os.environ.get("SITE_URL", "http://example.com")
-ALLOWED_HOST = os.environ.get('HOSTS', "localhost, 127.0.0.1").split(",")
 
 # Allow connection from all host
 CORS(app) 
@@ -63,7 +69,7 @@ def send_mail():
             Your registration request has been submitted successfully.<br>
             <br>You will be notified when your request has been granted.    
         </p>
-        <p style="font-size:20px; line-height:8px;>Keep Jamming!!!<br>Lakunle-CEO</p>
+        <p style="font-size:20px; line-height:8px;">Keep Jamming!!!<br>Lakunle-CEO</p>
     """.format(user_name)
     # Email Message body that will be sent to the developer 
     client_body = """
@@ -84,7 +90,7 @@ def send_mail():
                 margin: 4px 2px;">Register User</button>
         </form>
     """.format(user_name, user_email, url)
-    new_user = User(name=user_name, email=user_email)
+    new_user = SpotifyUser(name=user_name, email=user_email)
     try:
         # Register add new user to the data base
         db.session.add(new_user)
@@ -107,15 +113,18 @@ def send_mail():
 def get_user(email):
     try:
         # Get user in the data base
-        user = User.query.get(email.lower())
+        user = SpotifyUser.query.get(email.lower())
+        
         if user: #check if user exist
             # if user return a json user object
             user = {"name":user.name, "email":user.email, "registered":user.registered, "pending":user.pending}
             return jsonify(user), 200
+        
         # else return error message
         else:
             return jsonify({"error":"user does not exist"}), 401
-    #Hnadle error            
+    
+    #Handle error            
     except Exception as e:
         print(e)
         abort(500)
@@ -125,22 +134,27 @@ def get_user(email):
 def alter_user():
     username = request.args.get('name')
     user_email = request.args.get('email')
+    
     # Check if email is part of the request
     if user_email is None or username is None:
         abort(400)
+    
     # get the user
-    user = User.query.get(user_email.lower())
-    print(user)
+    user = SpotifyUser.query.get(user_email.lower())
+    
     # user not exist return error message 
     if not user:
         return jsonify({"error":"user does not exist"}), 401
+    
     # if user exist, Alter the registered and pending status of user and also send email to the user
     user.registered = True
     user.pending = False
+    
     #update the database
     try:
         db.session.add(user)
         db.session.commit()
+    
         # send an email to the user and notify changes made 
         body = """
             <h1>RE: REGISTRATION REQUEST</h1>
@@ -156,8 +170,10 @@ def alter_user():
             </p> 
         """.format(username, url)
         emails.send_html_mail(sender, user_email, "RE:JAMMIMG APP REGISTRATION REQUEST", body, password)
+    
         # return a success message
         return jsonify({"msg":"Success"}), 201
+    
     #handle all errors
     except Exception as e:
         print(e) 
@@ -180,4 +196,4 @@ def internal_server_error(error):
 
 # Run the Flask application
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=DEBUG)
