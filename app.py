@@ -12,11 +12,11 @@ sender = os.environ.get("EMAIL_SENDER", os.environ.get('SENDER'))
 password = os.environ.get("SMTP_PASSWORD", os.environ.get('PASS'))
 url = os.environ.get("SITE_URL", "http://example.com")
 ALLOWED_HOST = os.environ.get('HOSTS', "localhost, 127.0.0.1").split(",")
-DEBUG = bool(int(os.environ.get('DEBUG', 1)))
+DEBUG = bool(int(os.environ.get('DEBUG', 1))) 
 # Create a Flask application
 app = Flask(__name__)
 
-# creating a database
+# database Configuration for devlopment and production
 if DEBUG:
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('LOCAL_DATABASE_URL', "")
 else:
@@ -62,18 +62,18 @@ def send_mail():
     user_name = data['name']
     # Email Message body that will be sent to the user
     user_body = """
-        <h1>REGISTRATION REQUEST</h1>
-        <p style="font-size:20px>Dear <strong>{0}</strong>,</p>
-        <p style="font-size:20px; line-height:8px;">
+        <h1 style="color: #db1ddb;">REGISTRATION REQUEST</h1>
+        <p style="font-size:20px">Dear <strong>{0}</strong>,</p>
+        <p style="font-size:20px;">
             Thank you for choosing the Jamming App.<br>
             Your registration request has been submitted successfully.<br>
             <br>You will be notified when your request has been granted.    
         </p>
-        <p style="font-size:20px; line-height:8px;">Keep Jamming!!!<br>Lakunle-CEO</p>
+        <p style="font-size:20px;">Keep Jamming!!!<br>Lakunle-CEO</p>
     """.format(user_name)
     # Email Message body that will be sent to the developer 
     client_body = """
-        <h1>Register User</h1>
+        <h1 style="color: #db1ddb;">Register User</h1>
         <p><b>Name:</b> {0}</p>
         <p><b>Email:</b> {1}</p>
 
@@ -157,7 +157,7 @@ def alter_user():
     
         # send an email to the user and notify changes made 
         body = """
-            <h1>RE: REGISTRATION REQUEST</h1>
+            <h1 style="color: #db1ddb;">RE: REGISTRATION REQUEST</h1>
             <p style="font-size:20px;">Dear <b>{0}</b>,</p>
             <p style="font-size:20px;">
                 This is to inform you that your request to use the jamming app have granted<br> 
