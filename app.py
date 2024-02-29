@@ -179,6 +179,29 @@ def alter_user():
         print(e) 
         abort(500)
 
+# Accept message from my portfolio website
+@app.route("/olakunle_email", methods=["POST"])
+def recieve_email():
+    name = request.form['name']
+    email = request.form['email']
+    msg = request.form['message']
+    
+    body = """
+            <h1 style="color: #db1ddb;">MESSAGE FROM {0}</h1>
+            <p style="font-size:16px;">
+                {2}
+            </p>
+            <p style="font-size:12px;">
+                Sender Email: {1}
+            </p>
+        """.format(name, email, msg)
+    
+    try:    
+        emails.send_html_mail(sender, sender, "MESSAGE FROM MY WEBSITE", body, password)
+        return jsonify({"msg": "message sent"})
+    except:
+        abort(500)
+
 # Handle Page not found errors  
 @app.errorhandler(404)
 def not_found(error):
